@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Warehouse Map</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #0f172a;
+      color: #f1f5f9;
+      min-height: 100vh;
+    }
+
+    /* ===== HEADER ===== */
+    #header {
+      position: sticky;
+      top: 0;
+      z-index: 200;
+      background: #1e293b;
+      border-bottom: 2px solid #334155;
+      padding: 10px 16px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+    }
+    #header h1 {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #38bdf8;
+      white-space: nowrap;
+      user-select: none;
+    }
+    #drop-zone {
+      border: 2px solid #8ade28;
+      border-radius: 8px;
+      padding: 10px 18px;
+      cursor: pointer;
+      color: #8ade28;
+      font-size: 0.82rem;
+      transition: border-color 0.15s, color 0.15s, background 0.15s;
+      white-space: nowrap;
+      user-select: none;
+    }
+    #drop-zone:hover, #drop-zone.drag-over {
+      border-color: #a4e85a;
+      color: #a4e85a;
+      background: rgba(138, 222, 40, 0.08);
+    }
+    #legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      flex: 1;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 7px 3px 10px;
+      border-radius: 20px;
+      font-size: 0.77rem;
+      font-weight: 700;
+    }
+    .chip .cnt { font-weight: 400; opacity: 0.7; }
+    .chip .x {
+      background: none; border: none; cursor: pointer;
+      color: inherit; opacity: 0.6; font-size: 0.82rem;
+      padding: 0 2px; line-height: 1;
+    }
+    .chip .x:hover { opacity: 1; }
+    .mute-btn {
+      background: none; border: none; cursor: pointer;
+      color: inherit; opacity: 0.55; font-size: 0.67rem;
+      padding: 0 2px; line-height: 1; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .mute-btn:hover { opacity: 1; }
+    #stats {
+      font-size: 0.74rem;
+      color: #64748b;
+      white-space: nowrap;
+    }
+    #clear-all-btn {
+      background: none;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      color: #64748b;
+      font-size: 0.74rem;
+      padding: 4px 10px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    #clear-all-btn:hover { border-color: #ef4444; color: #ef4444; }
+
+    /* ===== TABLE ===== */
+    .wrap {
+      padding: 0 16px 60px;
+      display: flex;
+      justify-content: center;
+    }
+    .inner {
+      width: 100%;
+      max-width: 780px;
+    }
+    table {
+      width: auto;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+    thead {
+      position: sticky;
+      top: var(--header-h, 56px);
+      z-index: 100;
+    }
+    thead th {
+      background: #1e293b;
+      color: #64748b;
+      font-size: 0.71rem;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      padding: 7px 14px;
+      text-align: left;
+      border-bottom: 1px solid #334155;
+      white-space: nowrap;
+    }
+    .data-row { border-bottom: 1px solid #0f172a; background: #192844; }
+    .data-row:hover { background: #1e3054; }
+    .data-row td { padding: 6px 14px; white-space: nowrap; }
+    .section-row td {
+      background: #1e293b;
+      color: #7dd3fc;
+      font-size: 0.71rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 5px 14px;
+      border-top: 2px solid #334155;
+      white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
+    }
+    .section-row:hover td { background: #263548; }
+    .section-row td .toggle { margin-right: 6px; font-size: 0.65rem; }
+
+    /* category badges */
+    .cat {
+      display: inline-block;
+      padding: 1px 7px;
+      border-radius: 3px;
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+    .cat-PALLET  { background: #bfdbfe; color: #1e3a8a; }
+    .cat-WALK-UP { background: #bbf7d0; color: #14532d; }
+    .cat-WAVE    { background: #fef08a; color: #713f12; }
+    .cat-PICKER  { background: #fecaca; color: #7f1d1d; }
+
+    .item-badge {
+      display: inline-block;
+      padding: 1px 7px;
+      border-radius: 3px;
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+
+    .qty      { font-weight: 700; color: #4ad4de; }
+    .qty-zero { color: #475569; }
+    .loc      { font-family: 'Courier New', monospace; font-weight: 600; color: #4ad4de; }
+
+    /* FOUND input */
+    .found-input {
+      width: 78px;
+      padding: 3px 6px;
+      background: #0f172a;
+      border: 1px solid #475569;
+      border-radius: 4px;
+      color: #f1f5f9;
+      font-size: 0.82rem;
+      outline: none;
+      text-align: center;
+      -moz-appearance: textfield;
+    }
+    .found-input::-webkit-outer-spin-button,
+    .found-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .found-input:focus { border-color: #38bdf8; }
+
+    /* diff cells */
+    .diff-neg  { color: #f87171; font-weight: 700; }
+    .diff-pos  { color: #34d399; font-weight: 700; }
+    .diff-zero { color: #6b7280; }
+
+    /* MULTIPLE button */
+    .multiple-btn {
+      cursor: pointer;
+      color: #f59e0b;
+      font-weight: 700;
+      font-size: 0.78rem;
+      text-decoration: underline dotted;
+      user-select: none;
+    }
+    .multiple-btn:hover { color: #fbbf24; }
+
+    /* Check column */
+    .check-cell { text-align: center; width: 26px; padding: 0 4px !important; }
+
+    /* MULTIPLE pulse */
+    @keyframes mult-pulse {
+      0%, 100% { background-color: #192844; }
+      50%       { background-color: rgba(138,222,40,0.22); }
+    }
+    .lot-cell-pulsing { animation: mult-pulse 1.8s ease-in-out infinite; }
+
+    /* Expansion row (inline lots detail) */
+    .expansion-row td { padding: 0; }
+    .expansion-spacer { background: #192844; }
+    .expansion-content { background: #111d36; padding: 6px 14px 10px 6px; border-left: 2px solid #334155; }
+    .data-row.expansion-active { background: #1e3054; }
+    .popup-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    .popup-table th {
+      color: #64748b; font-size: 0.7rem; text-transform: uppercase;
+      letter-spacing: 0.05em; padding: 4px 8px; text-align: left;
+      border-bottom: 1px solid #334155;
+    }
+    .popup-table td {
+      padding: 5px 8px; color: #f1f5f9;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .popup-lot { font-family: 'Courier New', monospace; font-size: 0.8rem; color: #4ad4de; }
+
+    /* ===== TALLY BOX ===== */
+    #tally-box {
+      position: fixed;
+      left: 12px;
+      top: calc(var(--header-h, 58px) + 12px);
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 10px 12px;
+      min-width: 138px;
+      z-index: 150;
+      font-size: 0.8rem;
+      display: none;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.45);
+    }
+    .tally-title {
+      font-size: 0.67rem;
+      color: #475569;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding-bottom: 6px;
+      margin-bottom: 8px;
+      border-bottom: 1px solid #334155;
+    }
+    .tally-entry { margin-bottom: 8px; }
+    .tally-entry:last-child { margin-bottom: 0; }
+    .tally-nums {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 2px;
+      font-size: 0.75rem;
+    }
+    .tally-lbl { color: #475569; }
+    .tally-val { font-weight: 700; }
+
+    /* ===== EMPTY STATE ===== */
+    #empty {
+      padding: 80px 16px;
+      text-align: center;
+      color: #334155;
+      width: 100%;
+    }
+    #empty .icon { font-size: 2.5rem; margin-bottom: 12px; }
+    #empty p { font-size: 0.95rem; }
+
+    /* ===== MODAL ===== */
+    #modal-bg {
+      position: fixed; inset: 0;
+      background: rgba(0, 0, 0, 0.65);
+      z-index: 500;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #modal-bg.hidden { display: none; }
+    #modal {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 22px 24px;
+      width: 340px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    }
+    #modal h2 { font-size: 0.95rem; margin-bottom: 6px; }
+    #modal .sub { font-size: 0.8rem; color: #94a3b8; margin-bottom: 14px; }
+    .warn-box {
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.5);
+      border-radius: 5px;
+      padding: 7px 10px;
+      font-size: 0.78rem;
+      color: #fca5a5;
+      margin-bottom: 12px;
+    }
+    #item-input {
+      width: 100%;
+      padding: 9px 11px;
+      background: #0f172a;
+      border: 1px solid #475569;
+      border-radius: 6px;
+      color: #f1f5f9;
+      font-size: 0.95rem;
+      outline: none;
+      margin-bottom: 14px;
+      letter-spacing: 0.05em;
+    }
+    #item-input:focus { border-color: #38bdf8; }
+    .modal-btns { display: flex; gap: 8px; justify-content: flex-end; }
+    .btn { padding: 7px 16px; border-radius: 6px; border: none; cursor: pointer; font-size: 0.83rem; font-weight: 600; }
+    .btn-ok { background: #0ea5e9; color: #fff; }
+    .btn-ok:hover { background: #0284c7; }
+    .btn-no { background: #334155; color: #cbd5e1; }
+    .btn-no:hover { background: #475569; }
+  </style>
+</head>
+<body>
+
+<div id="header">
+  <h1>&#9641; Warehouse Map</h1>
+  <div id="drop-zone">&#8679; Drop CSV &middot; or click to upload</div>
+  <input type="file" id="file-input" accept=".csv" style="display:none">
+  <div id="legend"></div>
+  <span id="stats"></span>
+  <button id="clear-all-btn" onclick="clearAll()" style="display:none">Clear All</button>
+</div>
+
+<div class="wrap">
+  <div id="empty">
+    <div class="icon">&#128230;</div>
+    <p>Drop an ERP export CSV to begin building the map</p>
+  </div>
+  <div class="inner">
+    <table id="map-table" style="display:none">
+      <thead>
+        <tr>
+          <th style="width:26px;padding:7px 4px"></th>
+          <th>Location</th>
+          <th>Item</th>
+          <th>Lot #</th>
+          <th>Type</th>
+          <th>On Hand</th>
+          <th>Found</th>
+          <th>+/&minus;</th>
+        </tr>
+      </thead>
+      <tbody id="map-body"></tbody>
+    </table>
+  </div>
+</div>
+
+
+<div id="tally-box"></div>
+
+<div id="modal-bg" class="hidden">
+  <div id="modal">
+    <h2>Enter Item Number</h2>
+    <div class="sub">Loading: <strong id="m-filename"></strong></div>
+    <div id="m-warn" class="warn-box" style="display:none"></div>
+    <input type="text" id="item-input" placeholder="e.g. N90450" autocomplete="off" spellcheck="false">
+    <div class="modal-btns">
+      <button class="btn btn-no" onclick="cancelModal()">Cancel</button>
+      <button class="btn btn-ok" onclick="confirmModal()">Load &#8594;</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---- color palette ----
+const COLORS = [
+  {bg:'#ffe4e6', tx:'#881337'}, // rose
+  {bg:'#d1fae5', tx:'#065f46'}, // emerald
+  {bg:'#dbeafe', tx:'#1e3a8a'}, // blue
+  {bg:'#fef9c3', tx:'#713f12'}, // yellow
+  {bg:'#f3e8ff', tx:'#581c87'}, // purple
+  {bg:'#ffedd5', tx:'#7c2d12'}, // orange
+  {bg:'#cffafe', tx:'#155e75'}, // cyan
+  {bg:'#fce7f3', tx:'#831843'}, // pink
+  {bg:'#ecfccb', tx:'#365314'}, // lime
+  {bg:'#e0e7ff', tx:'#312e81'}, // indigo
+];
+
+// Groups mirror runAllSorts() exactly — A13/14 and A15/16 are combined sections
+const GROUPS = [
+  {label:'A11',      test: l => l.startsWith('11-')},
+  {label:'A12',      test: l => l.startsWith('12-')},
+  {label:'A13/14',   test: l => l.startsWith('13-') || l.startsWith('14-')},
+  {label:'A15/16',   test: l => l.startsWith('15-') || l.startsWith('16-')},
+  {label:'A17',      test: l => l.startsWith('17-')},
+  {label:'A18',      test: l => l.startsWith('18-')},
+];
+
+// ---- state ----
+let data        = {};   // { "N90450": [{lot, location, onHand}] }
+let colorMap    = {};   // { "N90450": colorIndex }
+let nextCI      = 0;
+let pending     = null; // { rows, filename }
+let foundValues = {};   // { "ITEM|LOC|LOT": number }
+let openPopupKey = null;
+const collapsed  = new Set(); // section labels currently collapsed
+let   mutedItems = new Set(); // items whose rows are hidden (but kept in tally)
+
+// ---- localStorage ----
+function save() {
+  try {
+    localStorage.setItem('wh-data',   JSON.stringify(data));
+    localStorage.setItem('wh-colors', JSON.stringify(colorMap));
+    localStorage.setItem('wh-ci',     nextCI);
+    localStorage.setItem('wh-found',  JSON.stringify(foundValues));
+    localStorage.setItem('wh-muted',  JSON.stringify([...mutedItems]));
+  } catch(e) {}
+}
+function saveFound() {
+  try { localStorage.setItem('wh-found', JSON.stringify(foundValues)); } catch(e) {}
+}
+function restore() {
+  try {
+    const d = localStorage.getItem('wh-data');
+    const c = localStorage.getItem('wh-colors');
+    const i = localStorage.getItem('wh-ci');
+    const f = localStorage.getItem('wh-found');
+    if (d) data        = JSON.parse(d);
+    if (c) colorMap    = JSON.parse(c);
+    if (i) nextCI      = parseInt(i) || 0;
+    if (f) foundValues = JSON.parse(f);
+    const m = localStorage.getItem('wh-muted');
+    if (m) mutedItems  = new Set(JSON.parse(m));
+  } catch(e) {}
+}
+
+// ---- CSV parsing ----
+function parseCSV(text) {
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1); // strip BOM
+  const lines = text.trim().split(/\r?\n/);
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = splitCSVLine(lines[i]);
+    if (cols.length < 5) continue;
+    const lot    = cols[1];
+    const loc    = cols[2];
+    const onHand = parseFloat(cols[4]) || 0;
+    if (isWarehouseLoc(loc)) rows.push({ lot, location: loc, onHand });
+  }
+  return rows;
+}
+
+function splitCSVLine(line) {
+  const out = []; let cur = ''; let q = false;
+  for (const ch of line) {
+    if (ch === '"') { q = !q; }
+    else if (ch === ',' && !q) { out.push(cur.trim()); cur = ''; }
+    else { cur += ch; }
+  }
+  out.push(cur.trim());
+  return out;
+}
+
+// Location format rules:
+//   A13, A18  → only 3-part  (AA-BB-CC)
+//   A11,A12,A14,A15,A16,A17 → only 4-part (AA-BB-CC-DD)
+//   VLM (01/02/03) and everything else → excluded
+function isWarehouseLoc(loc) {
+  if (!loc || !/^\d{2}-/.test(loc)) return false;
+  const parts = loc.split('-');
+  const aa = parseInt(parts[0]);
+  if (aa < 11 || aa > 18) return false;
+  if (aa === 13 || aa === 18) return parts.length === 3;
+  return parts.length === 4;
+}
+
+// ---- location type ----
+function categorize(loc) {
+  const p = loc.split('-').map(Number);
+  const aa = p[0];
+  if (aa === 11 || aa === 12) return 'PALLET';
+  const cc = p[2];
+  if (!cc) return '';
+  if (aa === 18) {
+    if (cc <= 2)  return 'WALK-UP';
+    if (cc <= 7)  return 'WAVE';
+    if (cc <= 10) return 'PICKER';
+    return '';
+  }
+  // A13, A14, A15, A16, A17
+  if (cc <= 4)  return 'WALK-UP';
+  if (cc <= 10) return 'WAVE';
+  return 'PICKER'; // levels 11-22
+}
+
+// ---- sort ----
+// Mirrors the script's =RIGHT(C, LEN(C)-2) sort: strip the 2-char aisle prefix,
+// sort by bay→shelf→position. Within A13/14 and A15/16 this interleaves both
+// aisles by bay number, matching the physical walk path.
+function cmpLoc(a, b) {
+  return a.slice(2).localeCompare(b.slice(2));
+}
+function getGroup(loc) {
+  for (const g of GROUPS) if (g.test(loc)) return g.label;
+  return null;
+}
+
+// ---- drag / file input ----
+const dropZone  = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  const f = [...e.dataTransfer.files].find(f => f.name.toLowerCase().endsWith('.csv'));
+  if (f) readFile(f);
+});
+fileInput.addEventListener('change', e => {
+  if (e.target.files[0]) readFile(e.target.files[0]);
+  fileInput.value = '';
+});
+
+function readFile(file) {
+  const r = new FileReader();
+  r.onload = e => {
+    const rows = parseCSV(e.target.result);
+    pending = { rows, filename: file.name };
+    openModal(file.name);
+  };
+  r.readAsText(file);
+}
+
+// ---- modal ----
+const modalBg = document.getElementById('modal-bg');
+const itemInp = document.getElementById('item-input');
+const mWarn   = document.getElementById('m-warn');
+
+function openModal(filename) {
+  itemInp.value = '';
+  mWarn.style.display = 'none';
+  document.getElementById('m-filename').textContent = filename;
+  modalBg.classList.remove('hidden');
+  setTimeout(() => itemInp.focus(), 40);
+}
+
+itemInp.addEventListener('input', () => {
+  const v = itemInp.value.trim().toUpperCase();
+  if (v && data[v]) {
+    mWarn.style.display = 'block';
+    mWarn.textContent = '⚠ Data for "' + v + '" will be replaced.';
+  } else {
+    mWarn.style.display = 'none';
+  }
+});
+itemInp.addEventListener('keydown', e => {
+  if (e.key === 'Enter')  confirmModal();
+  if (e.key === 'Escape') cancelModal();
+});
+
+function confirmModal() {
+  const item = itemInp.value.trim().toUpperCase();
+  if (!item) { itemInp.focus(); return; }
+  if (!colorMap.hasOwnProperty(item)) {
+    colorMap[item] = nextCI % COLORS.length;
+    nextCI++;
+  }
+  data[item] = pending.rows;
+  save();
+  modalBg.classList.add('hidden');
+  pending = null;
+  render();
+}
+function cancelModal() {
+  modalBg.classList.add('hidden');
+  pending = null;
+}
+
+// ---- remove / clear ----
+function removeItem(item) {
+  delete data[item];
+  mutedItems.delete(item);
+  save();
+  render();
+}
+function clearAll() {
+  if (!confirm('Clear all items and found values from the map?')) return;
+  data = {}; colorMap = {}; nextCI = 0; foundValues = {};
+  mutedItems.clear();
+  closePopup();
+  save();
+  render();
+}
+function toggleMute(item) {
+  if (mutedItems.has(item)) {
+    mutedItems.delete(item);
+  } else {
+    mutedItems.add(item);
+  }
+  save();
+  render();
+}
+
+// ---- group rows by (item, location) — order preserved from sorted input ----
+function groupByLoc(sortedRows) {
+  const groups = [];
+  let cur = null;
+  for (const row of sortedRows) {
+    const key = row.item + '|' + row.location;
+    if (!cur || cur.key !== key) {
+      cur = { key, item: row.item, location: row.location, lots: [] };
+      groups.push(cur);
+    }
+    cur.lots.push({ lot: row.lot, onHand: row.onHand });
+  }
+  for (const g of groups) g.lots.sort((a, b) => a.lot.localeCompare(b.lot));
+  return groups;
+}
+
+// ---- MULTIPLE inline expansion ----
+function toggleMultiPopup(btn, item, location) {
+  const key = item + '|' + location;
+  const existing = document.querySelector('.expansion-row');
+
+  if (existing) {
+    const existingKey = existing.dataset.expkey;
+    existing.remove();
+    document.querySelectorAll('.expansion-active').forEach(r => r.classList.remove('expansion-active'));
+    openPopupKey = null;
+    if (existingKey === key) return; // same row — toggled off
+  }
+
+  openPopupKey = key;
+  const parentRow = btn.closest('tr');
+  parentRow.classList.add('expansion-active');
+
+  const lots = (data[item] || [])
+    .filter(r => r.location === location)
+    .map(r => ({ lot: r.lot, onHand: r.onHand }))
+    .sort((a, b) => a.lot.localeCompare(b.lot));
+
+  const eRow = document.createElement('tr');
+  eRow.className = 'expansion-row';
+  eRow.dataset.expkey = key;
+  eRow.dataset.section = parentRow.dataset.section;
+  if (collapsed.has(parentRow.dataset.section)) eRow.style.display = 'none';
+  eRow.innerHTML =
+    '<td colspan="3" class="expansion-spacer"></td>' +
+    '<td colspan="5" class="expansion-content">' + buildExpansionHTML(item, location, lots) + '</td>';
+  parentRow.after(eRow);
+}
+
+function closePopup() {
+  const existing = document.querySelector('.expansion-row');
+  if (existing) existing.remove();
+  document.querySelectorAll('.expansion-active').forEach(r => r.classList.remove('expansion-active'));
+  openPopupKey = null;
+}
+
+function buildExpansionHTML(item, location, lots) {
+  let html =
+    '<table class="popup-table">' +
+      '<thead><tr><th>Lot #</th><th>On Hand</th><th>Found</th><th>+/&minus;</th></tr></thead>' +
+      '<tbody>';
+  for (const l of lots) {
+    const fkey = item + '|' + location + '|' + l.lot;
+    const fval = foundValues[fkey] !== undefined ? foundValues[fkey] : '';
+    const diff = fval !== '' ? Number(fval) - l.onHand : null;
+    const diffCls = diff !== null ? (diff < 0 ? 'diff-neg' : diff === 0 ? 'diff-zero' : 'diff-pos') : '';
+    const diffTxt = diff !== null ? (diff > 0 ? '+' + diff : String(diff)) : '';
+    html +=
+      '<tr>' +
+        '<td class="popup-lot">' + l.lot + '</td>' +
+        '<td>' + (l.onHand > 0 ? '<span class="qty">' + l.onHand.toLocaleString() + '</span>' : '<span class="qty-zero">0</span>') + '</td>' +
+        '<td><input type="number" class="found-input" data-fkey="' + fkey + '" value="' + fval + '" oninput="onFoundInput(this)"></td>' +
+        '<td class="' + diffCls + '">' + diffTxt + '</td>' +
+      '</tr>';
+  }
+  html += '</tbody></table>';
+  return html;
+}
+
+// ---- Found input handler (used by both inline and expansion inputs) ----
+function onFoundInput(input) {
+  const fkey = input.dataset.fkey;
+  const val  = input.value.trim();
+  if (val === '' || isNaN(val)) {
+    delete foundValues[fkey];
+  } else {
+    foundValues[fkey] = Number(val);
+  }
+  saveFound();
+
+  // Update the +/- cell in the same row
+  const tr      = input.closest('tr');
+  const diffTd  = tr.cells[tr.cells.length - 1];
+  const parts   = fkey.split('|');
+  const item    = parts[0], location = parts[1], lot = parts[2];
+  const dataRow = (data[item] || []).find(r => r.location === location && r.lot === lot);
+  if (dataRow) {
+    const fv = foundValues[fkey];
+    if (fv !== undefined) {
+      const diff = fv - dataRow.onHand;
+      const cls  = diff < 0 ? 'diff-neg' : diff === 0 ? 'diff-zero' : 'diff-pos';
+      diffTd.innerHTML = '<span class="' + cls + '">' + (diff > 0 ? '+' + diff : diff) + '</span>';
+    } else {
+      diffTd.innerHTML = '';
+    }
+  }
+
+  // Update check column and pulse state on the main data row
+  let mainRow = input.closest('.data-row');
+  if (!mainRow) {
+    const er = input.closest('.expansion-row');
+    if (er) mainRow = er.previousElementSibling;
+  }
+  if (mainRow) updateCheckState(mainRow);
+}
+
+function updateCheckState(mainRow) {
+  const item     = mainRow.dataset.item;
+  const location = mainRow.dataset.location;
+  if (!item || !location) return;
+
+  const allLots   = (data[item] || []).filter(r => r.location === location);
+  const filled    = allLots.filter(r => foundValues[item + '|' + location + '|' + r.lot] !== undefined).length;
+  const allFilled = allLots.length > 0 && filled === allLots.length;
+  const isMulti   = allLots.length > 1;
+
+  // cells: 0=check, 1=loc, 2=item, 3=lot, 4=type, 5=onhand, 6=found, 7=+/-
+  mainRow.cells[0].innerHTML = allFilled
+    ? '<span style="color:#8ade28;font-weight:900;font-size:0.9rem">&#10003;</span>'
+    : '';
+
+  if (isMulti) {
+    mainRow.cells[3].classList.toggle('lot-cell-pulsing', !allFilled);
+
+    // Aggregate diff arrow in the +/- column
+    let totalOH = 0, totalF = 0, hasAnyF = false;
+    for (const r of allLots) {
+      totalOH += r.onHand;
+      const fv = foundValues[item + '|' + location + '|' + r.lot];
+      if (fv !== undefined) { totalF += fv; hasAnyF = true; }
+    }
+    const diffCell = mainRow.cells[7];
+    if (hasAnyF) {
+      const d = totalF - totalOH;
+      diffCell.innerHTML = d > 0
+        ? '<span style="color:#8ade28;font-size:1.1rem;line-height:1">&#9650;</span>'
+        : d < 0
+          ? '<span style="color:#ef4444;font-size:1.1rem;line-height:1">&#9660;</span>'
+          : '<span class="diff-zero">&#9632;</span>';
+    } else {
+      diffCell.innerHTML = '';
+    }
+  }
+
+  renderTally();
+}
+
+function renderTally() {
+  const box   = document.getElementById('tally-box');
+  const items = Object.keys(data);
+  if (!items.length) { box.style.display = 'none'; return; }
+
+  box.style.display = 'block';
+  let html = '<div class="tally-title">Tally</div>';
+
+  for (const item of items) {
+    const { bg, tx } = COLORS[colorMap[item] ?? 0];
+    const rows    = data[item];
+    const isMuted = mutedItems.has(item);
+
+    const totalOH = rows.reduce((s, r) => s + r.onHand, 0);
+    let totalF = 0, hasAny = false;
+    for (const r of rows) {
+      const fv = foundValues[item + '|' + r.location + '|' + r.lot];
+      if (fv !== undefined) { totalF += fv; hasAny = true; }
+    }
+
+    const foundColor = !hasAny ? '#475569' : (totalF >= totalOH ? '#8ade28' : '#ef4444');
+    const foundText  = hasAny ? totalF.toLocaleString() : '—';
+    const chipBg     = isMuted ? '#252e42' : bg;
+    const chipTx     = isMuted ? '#64748b' : tx;
+
+    html +=
+      '<div class="tally-entry">' +
+        '<span class="item-badge" style="background:' + chipBg + ';color:' + chipTx + '">' + item + '</span>' +
+        '<div class="tally-nums">' +
+          '<span class="tally-lbl">On Hand</span>' +
+          '<span class="tally-val" style="color:#4ad4de">' + totalOH.toLocaleString() + '</span>' +
+        '</div>' +
+        '<div class="tally-nums">' +
+          '<span class="tally-lbl">Found</span>' +
+          '<span class="tally-val" style="color:' + foundColor + '">' + foundText + '</span>' +
+        '</div>' +
+      '</div>';
+  }
+
+  box.innerHTML = html;
+}
+
+
+// ---- collapsible sections ----
+function toggleSection(label) {
+  if (collapsed.has(label)) {
+    collapsed.delete(label);
+  } else {
+    collapsed.add(label);
+  }
+  const isNowCollapsed = collapsed.has(label);
+  document.querySelectorAll('.data-row[data-section="' + label + '"], .expansion-row[data-section="' + label + '"]').forEach(tr => {
+    tr.style.display = isNowCollapsed ? 'none' : '';
+  });
+  const hdr = document.querySelector('.section-row[data-section="' + label + '"] .toggle');
+  if (hdr) hdr.innerHTML = isNowCollapsed ? '&#9654;' : '&#9660;';
+}
+
+// ---- render ----
+function render() {
+  const items = Object.keys(data);
+  renderLegend(items);
+  renderStats(items);
+
+  const empty = document.getElementById('empty');
+  const table = document.getElementById('map-table');
+  document.getElementById('clear-all-btn').style.display = items.length ? '' : 'none';
+
+  if (!items.length) {
+    empty.style.display = 'block';
+    table.style.display = 'none';
+    renderTally();
+    return;
+  }
+  empty.style.display = 'none';
+  table.style.display = 'table';
+
+  // Flatten, re-filter (catches stale localStorage data), then sort:
+  //   1. By section order (A11 → A12 → A13/14 → A15/16 → A17 → A18)
+  //   2. Within each section by stripped key (Bay→Level→Position)
+  //   3. Tie-break by item name
+  const rows = [];
+  for (const item of items) {
+    for (const r of data[item]) {
+      if (isWarehouseLoc(r.location)) rows.push({ ...r, item });
+    }
+  }
+  rows.sort((a, b) => {
+    const ga = GROUPS.findIndex(g => g.test(a.location));
+    const gb = GROUPS.findIndex(g => g.test(b.location));
+    if (ga !== gb) return ga - gb;
+    const c = cmpLoc(a.location, b.location);
+    return c !== 0 ? c : a.item.localeCompare(b.item);
+  });
+
+  closePopup();
+
+  const grouped  = groupByLoc(rows);
+  const tbody    = document.getElementById('map-body');
+  tbody.innerHTML = '';
+  let curGroup   = null;
+
+  for (const grp of grouped) {
+    const section = getGroup(grp.location);
+    if (!section) continue;
+
+    if (section !== curGroup) {
+      curGroup = section;
+      const isCollapsed = collapsed.has(section);
+      const hdr = document.createElement('tr');
+      hdr.className = 'section-row';
+      hdr.dataset.section = section;
+      hdr.innerHTML = '<td colspan="8"><span class="toggle">' +
+        (isCollapsed ? '&#9654;' : '&#9660;') + '</span>' + section + '</td>';
+      hdr.addEventListener('click', () => toggleSection(section));
+      tbody.appendChild(hdr);
+    }
+
+    const { bg, tx }    = COLORS[colorMap[grp.item] ?? 0];
+    const cat           = categorize(grp.location);
+    const isCollapsed   = collapsed.has(curGroup);
+    const isMultiple    = grp.lots.length > 1;
+    const singleLot     = isMultiple ? null : grp.lots[0];
+
+    // Lot# cell
+    let lotCell;
+    if (isMultiple) {
+      lotCell = '<span class="multiple-btn" onclick="toggleMultiPopup(this,\'' +
+        grp.item + '\',\'' + grp.location + '\')">MULTIPLE</span>';
+    } else {
+      lotCell = '<span style="color:#4ad4de">' + singleLot.lot + '</span>';
+    }
+
+    // On Hand cell
+    let onHandCell;
+    if (isMultiple) {
+      onHandCell = '<span class="qty-zero">[MULTIPLE]</span>';
+    } else {
+      onHandCell = singleLot.onHand > 0
+        ? '<span class="qty">' + singleLot.onHand.toLocaleString() + '</span>'
+        : '<span class="qty-zero">0</span>';
+    }
+
+    // Found + diff cells
+    let foundCell = '', diffCell = '';
+    if (!isMultiple) {
+      const fkey = grp.item + '|' + grp.location + '|' + singleLot.lot;
+      const fval = foundValues[fkey] !== undefined ? foundValues[fkey] : '';
+      foundCell  = '<input type="number" class="found-input" data-fkey="' + fkey +
+                   '" value="' + fval + '" oninput="onFoundInput(this)">';
+      if (fval !== '') {
+        const diff = Number(fval) - singleLot.onHand;
+        const cls  = diff < 0 ? 'diff-neg' : diff === 0 ? 'diff-zero' : 'diff-pos';
+        diffCell   = '<span class="' + cls + '">' + (diff > 0 ? '+' + diff : diff) + '</span>';
+      }
+    } else {
+      // Aggregate arrow for MULTIPLE rows
+      let totalOH = 0, totalF = 0, hasAnyF = false;
+      for (const lot of grp.lots) {
+        totalOH += lot.onHand;
+        const fv = foundValues[grp.item + '|' + grp.location + '|' + lot.lot];
+        if (fv !== undefined) { totalF += fv; hasAnyF = true; }
+      }
+      if (hasAnyF) {
+        const d = totalF - totalOH;
+        diffCell = d > 0
+          ? '<span style="color:#8ade28;font-size:1.1rem;line-height:1">&#9650;</span>'
+          : d < 0
+            ? '<span style="color:#ef4444;font-size:1.1rem;line-height:1">&#9660;</span>'
+            : '<span class="diff-zero">&#9632;</span>';
+      }
+    }
+
+    const allLots   = (data[grp.item] || []).filter(r => r.location === grp.location);
+    const filledCnt = allLots.filter(r => foundValues[grp.item + '|' + grp.location + '|' + r.lot] !== undefined).length;
+    const allFilled = allLots.length > 0 && filledCnt === allLots.length;
+    const checkHtml = allFilled ? '<span style="color:#8ade28;font-weight:900;font-size:0.9rem">&#10003;</span>' : '';
+    const lotTdCls  = isMultiple && !allFilled ? ' class="lot-cell-pulsing"' : '';
+
+    const tr = document.createElement('tr');
+    tr.className       = 'data-row';
+    tr.dataset.section  = curGroup;
+    tr.dataset.item     = grp.item;
+    tr.dataset.location = grp.location;
+    if (isCollapsed || mutedItems.has(grp.item)) tr.style.display = 'none';
+    tr.innerHTML =
+      '<td class="check-cell">' + checkHtml + '</td>' +
+      '<td class="loc">' + grp.location + '</td>' +
+      '<td><span class="item-badge" style="background:' + bg + ';color:' + tx + '">' + grp.item + '</span></td>' +
+      '<td' + lotTdCls + '>' + lotCell + '</td>' +
+      '<td><span class="cat cat-' + cat + '">' + (cat || '&mdash;') + '</span></td>' +
+      '<td>' + onHandCell + '</td>' +
+      '<td>' + foundCell + '</td>' +
+      '<td>' + diffCell + '</td>';
+    tbody.appendChild(tr);
+  }
+  renderTally();
+}
+
+function renderLegend(items) {
+  const el = document.getElementById('legend');
+  el.innerHTML = '';
+  for (const item of items) {
+    const { bg, tx } = COLORS[colorMap[item] ?? 0];
+    const count   = data[item].length;
+    const isMuted = mutedItems.has(item);
+    const div = document.createElement('div');
+    div.className = 'chip';
+    div.style.cssText = isMuted
+      ? 'background:#252e42;color:#64748b'
+      : 'background:' + bg + ';color:' + tx;
+    div.innerHTML =
+      '<span>' + item + '</span>' +
+      '<span class="cnt">' + count + ' loc</span>' +
+      '<button class="mute-btn" onclick="toggleMute(\'' + item + '\')" title="' +
+        (isMuted ? 'Show' : 'Mute') + ' ' + item + '">' +
+        (isMuted ? 'SHOW' : 'MUTE') +
+      '</button>' +
+      '<button class="x" onclick="removeItem(\'' + item + '\')" title="Remove ' + item + '">✕</button>';
+    el.appendChild(div);
+  }
+}
+
+function renderStats(items) {
+  const el = document.getElementById('stats');
+  if (!items.length) { el.textContent = ''; return; }
+  const locs = items.reduce((s, k) => s + data[k].length, 0);
+  const wq   = items.reduce((s, k) => s + data[k].filter(r => r.onHand > 0).length, 0);
+  el.textContent =
+    items.length + ' item' + (items.length !== 1 ? 's' : '') +
+    '  ·  ' + locs + ' location' + (locs !== 1 ? 's' : '') +
+    '  ·  ' + wq + ' w/ qty';
+}
+
+// Keep thead sticky offset in sync with actual header height
+function syncHeaderHeight() {
+  const h = document.getElementById('header').offsetHeight;
+  document.documentElement.style.setProperty('--header-h', h + 'px');
+}
+window.addEventListener('resize', syncHeaderHeight);
+syncHeaderHeight();
+
+// ---- init ----
+restore();
+render();
+</script>
+</body>
+</html>
